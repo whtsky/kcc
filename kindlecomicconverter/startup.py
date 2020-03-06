@@ -24,24 +24,6 @@ from . import __version__
 from .shared import dependencyCheck
 
 
-def start():
-    dependencyCheck(3)
-    from . import KCC_gui
-    os.environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = "1"
-    KCCAplication = KCC_gui.QApplicationMessaging(sys.argv)
-    if KCCAplication.isRunning():
-        for i in range(1, len(sys.argv)):
-            KCCAplication.sendMessage(sys.argv[i])
-        else:
-            KCCAplication.sendMessage('ARISE')
-    else:
-        KCCWindow = KCC_gui.QMainWindowKCC()
-        KCCUI = KCC_gui.KCCGUI(KCCAplication, KCCWindow)
-        for i in range(1, len(sys.argv)):
-            KCCUI.handleMessage(sys.argv[i])
-        sys.exit(KCCAplication.exec_())
-
-
 def startC2E():
     dependencyCheck(2)
     from .comic2ebook import main

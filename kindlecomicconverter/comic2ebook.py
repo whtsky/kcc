@@ -36,10 +36,6 @@ from PIL import Image
 from subprocess import STDOUT, PIPE
 from psutil import Popen, virtual_memory, disk_usage
 from html import escape as hescape
-try:
-    from PyQt5 import QtCore
-except ImportError:
-    QtCore = None
 from .shared import md5Checksum, getImageFileName, walkSort, walkLevel, sanitizeTrace
 from . import comic2panel
 from . import image
@@ -511,16 +507,11 @@ def imgDirectoryProcessing(path):
         for afile in filenames:
             pagenumber += 1
             work.append([afile, dirpath, options])
-    if GUI:
-        GUI.progressBarTick.emit(str(pagenumber))
     if len(work) > 0:
         for i in work:
             workerPool.apply_async(func=imgFileProcessing, args=(i, ), callback=imgFileProcessingTick)
         workerPool.close()
         workerPool.join()
-        if GUI and not GUI.conversionAlive:
-            rmtree(os.path.join(path, '..', '..'), True)
-            raise UserWarning("Conversion interrupted.")
         if len(workerOutput) > 0:
             rmtree(os.path.join(path, '..', '..'), True)
             raise RuntimeError("One of workers crashed. Cause: " + workerOutput[0][0], workerOutput[0][1])
@@ -541,11 +532,6 @@ def imgFileProcessingTick(output):
             if page is not None:
                 options.imgMetadata[page[0]] = page[1]
                 options.imgOld.append(page[2])
-    if GUI:
-        GUI.progressBarTick.emit('tick')
-        if not GUI.conversionAlive:
-            workerPool.terminate()
-
 
 def imgFileProcessing(work):
     try:
@@ -857,17 +843,9 @@ def detectCorruption(tmppath, orgpath):
                 os.remove(os.path.join(root, name))
     if alreadyProcessed:
         print("WARNING: Source files are probably created by KCC. The second conversion will decrease quality.")
-        if GUI:
-            GUI.addMessage.emit('Source files are probably created by KCC. The second conversion will decrease quality.'
-                                , 'warning', False)
-            GUI.addMessage.emit('', '', False)
     if imageSmaller > imageNumber * 0.25 and not options.upscale and not options.stretch:
         print("WARNING: More than 25% of images are smaller than target device resolution. "
               "Consider enabling stretching or upscaling to improve readability.")
-        if GUI:
-            GUI.addMessage.emit('More than 25% of images are smaller than target device resolution.', 'warning', False)
-            GUI.addMessage.emit('Consider enabling stretching or upscaling to improve readability.', 'warning', False)
-            GUI.addMessage.emit('', '', False)
 
 
 def createNewTome():
@@ -1069,13 +1047,8 @@ def checkPre(source):
         raise UserWarning("Target directory is not writable.")
 
 
-def makeBook(source, qtgui=None):
-    global GUI
-    GUI = qtgui
-    if GUI:
-        GUI.progressBarTick.emit('1')
-    else:
-        checkTools(source)
+def makeBook(source):
+    checkTools(source)
     checkPre(source)
     print("Preparing source images...")
     path = getWorkFolder(source)
@@ -1087,13 +1060,9 @@ def makeBook(source, qtgui=None):
             y = 1024
         else:
             y = image.ProfileData.Profiles[options.profile][1][1]
-        comic2panel.main(['-y ' + str(y), '-i', '-m', path], qtgui)
+        comic2panel.main(['-y ' + str(y), '-i', '-m', path])
     print("Processing images...")
-    if GUI:
-        GUI.progressBarTick.emit('Processing images')
     imgDirectoryProcessing(os.path.join(path, "OEBPS", "Images"))
-    if GUI:
-        GUI.progressBarTick.emit('1')
     chapterNames = sanitizeTree(os.path.join(path, 'OEBPS', 'Images'))
     if 'Ko' in options.profile and options.format == 'CBZ':
         sanitizeTreeKobo(os.path.join(path, 'OEBPS', 'Images'))
@@ -1103,13 +1072,6 @@ def makeBook(source, qtgui=None):
         tomes = [path]
     filepath = []
     tomeNumber = 0
-    if GUI:
-        if options.format == 'CBZ':
-            GUI.progressBarTick.emit('Compressing CBZ files')
-        else:
-            GUI.progressBarTick.emit('Compressing EPUB files')
-        GUI.progressBarTick.emit(str(len(tomes) + 1))
-        GUI.progressBarTick.emit('tick')
     options.baseTitle = options.title
     options.covers = []
     for tome in tomes:
@@ -1137,14 +1099,12 @@ def makeBook(source, qtgui=None):
             makeZIP(tome + '_comic', tome, True)
         move(tome + '_comic.zip', filepath[-1])
         rmtree(tome, True)
-        if GUI:
-            GUI.progressBarTick.emit('tick')
-    if not GUI and options.format == 'MOBI':
+    if options.format == 'MOBI':
         print("Creating MOBI files...")
         work = []
         for i in filepath:
             work.append([i])
-        output = makeMOBI(work, GUI)
+        output = makeMOBI(work)
         for errors in output:
             if errors[0] != 0:
                 print('Error: KindleGen failed to create MOBI!')
@@ -1180,11 +1140,6 @@ def makeMOBIWorkerTick(output):
     makeMOBIWorkerOutput.append(output)
     if output[0] != 0:
         makeMOBIWorkerPool.terminate()
-    if GUI:
-        GUI.progressBarTick.emit('tick')
-        if not GUI.conversionAlive:
-            makeMOBIWorkerPool.terminate()
-
 
 def makeMOBIWorker(item):
     item = item[0]
@@ -1218,9 +1173,8 @@ def makeMOBIWorker(item):
         return [kindlegenErrorCode, kindlegenError, item]
 
 
-def makeMOBI(work, qtgui=None):
-    global GUI, makeMOBIWorkerPool, makeMOBIWorkerOutput
-    GUI = qtgui
+def makeMOBI(work):
+    global makeMOBIWorkerPool, makeMOBIWorkerOutput
     makeMOBIWorkerOutput = []
     availableMemory = virtual_memory().total / 1000000000
     if availableMemory <= 2:

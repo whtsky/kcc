@@ -25,21 +25,12 @@ from optparse import OptionParser, OptionGroup
 from multiprocessing import Pool
 from PIL import Image, ImageChops, ImageOps, ImageDraw
 from .shared import getImageFileName, walkLevel, walkSort, sanitizeTrace
-try:
-    from PyQt5 import QtCore
-except ImportError:
-    QtCore = None
 
 
 def mergeDirectoryTick(output):
     if output:
         mergeWorkerOutput.append(output)
         mergeWorkerPool.terminate()
-    if GUI:
-        GUI.progressBarTick.emit('tick')
-        if not GUI.conversionAlive:
-            mergeWorkerPool.terminate()
-
 
 def mergeDirectory(work):
     try:
@@ -87,11 +78,6 @@ def splitImageTick(output):
     if output:
         splitWorkerOutput.append(output)
         splitWorkerPool.terminate()
-    if GUI:
-        GUI.progressBarTick.emit('tick')
-        if not GUI.conversionAlive:
-            splitWorkerPool.terminate()
-
 
 # noinspection PyUnboundLocalVariable
 def splitImage(work):
@@ -184,8 +170,8 @@ def splitImage(work):
         return str(sys.exc_info()[1]), sanitizeTrace(sys.exc_info()[2])
 
 
-def main(argv=None, qtgui=None):
-    global options, GUI, splitWorkerPool, splitWorkerOutput, mergeWorkerPool, mergeWorkerOutput
+def main(argv=None):
+    global options, splitWorkerPool, splitWorkerOutput, mergeWorkerPool, mergeWorkerOutput
     parser = OptionParser(usage="Usage: kcc-c2p [options] comic_folder", add_help_option=False)
     mainOptions = OptionGroup(parser, "MANDATORY")
     otherOptions = OptionGroup(parser, "OTHER")
@@ -202,10 +188,6 @@ def main(argv=None, qtgui=None):
     parser.add_option_group(mainOptions)
     parser.add_option_group(otherOptions)
     options, args = parser.parse_args(argv)
-    if qtgui:
-        GUI = qtgui
-    else:
-        GUI = None
     if len(args) != 1:
         parser.print_help()
         return 1
@@ -231,16 +213,10 @@ def main(argv=None, qtgui=None):
                     for directory in dirs:
                         directoryNumer += 1
                         mergeWork.append([os.path.join(root, directory)])
-                if GUI:
-                    GUI.progressBarTick.emit('Combining images')
-                    GUI.progressBarTick.emit(str(directoryNumer))
                 for i in mergeWork:
                     mergeWorkerPool.apply_async(func=mergeDirectory, args=(i, ), callback=mergeDirectoryTick)
                 mergeWorkerPool.close()
                 mergeWorkerPool.join()
-                if GUI and not GUI.conversionAlive:
-                    rmtree(options.targetDir, True)
-                    raise UserWarning("Conversion interrupted.")
                 if len(mergeWorkerOutput) > 0:
                     rmtree(options.targetDir, True)
                     raise RuntimeError("One of workers crashed. Cause: " + mergeWorkerOutput[0][0],
@@ -253,18 +229,11 @@ def main(argv=None, qtgui=None):
                         work.append([root, name, options])
                     else:
                         os.remove(os.path.join(root, name))
-            if GUI:
-                GUI.progressBarTick.emit('Splitting images')
-                GUI.progressBarTick.emit(str(pagenumber))
-                GUI.progressBarTick.emit('tick')
             if len(work) > 0:
                 for i in work:
                     splitWorkerPool.apply_async(func=splitImage, args=(i, ), callback=splitImageTick)
                 splitWorkerPool.close()
                 splitWorkerPool.join()
-                if GUI and not GUI.conversionAlive:
-                    rmtree(options.targetDir, True)
-                    raise UserWarning("Conversion interrupted.")
                 if len(splitWorkerOutput) > 0:
                     rmtree(options.targetDir, True)
                     raise RuntimeError("One of workers crashed. Cause: " + splitWorkerOutput[0][0],

@@ -98,17 +98,6 @@ def sanitizeTrace(traceback):
 # noinspection PyUnresolvedReferences
 def dependencyCheck(level):
     missing = []
-    if level > 2:
-        try:
-            from PyQt5.QtCore import qVersion as qtVersion
-            if StrictVersion('5.6.0') > StrictVersion(qtVersion()):
-                missing.append('PyQt 5.6.0+')
-        except ImportError:
-            missing.append('PyQt 5.6.0+')
-        try:
-            import raven
-        except ImportError:
-            missing.append('raven 6.0.0+')
     if level > 1:
         try:
             from psutil import __version__ as psutilVersion
