@@ -362,8 +362,8 @@ class ComicPage:
             self.image = self.image.point(lambda p: p if p > bp else bp)
 
         # don't autocontrast grayscale pages that were originally color
-        if not self.opt.forcecolor and self.color:
-            return
+        # if not self.opt.forcecolor and self.color:
+        #     return
 
         self.image = ImageOps.autocontrast(self.image, preserve_tone=True)
 
